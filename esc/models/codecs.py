@@ -45,7 +45,7 @@ class ESC(BaseAudioCodec):
                 "recon_feat": recon_feat,
                 "codes": codes}
     
-    def forward(self, x, x_feat, num_streams, freeze_codebook=False):
+    def forward(self, x, x_feat=None, num_streams=6, freeze_codebook=False):
         """ Forward Function.
         Args: 
             x (Tensor): audio waveform with shape (Bs, L)

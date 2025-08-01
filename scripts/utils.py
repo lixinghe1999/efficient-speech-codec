@@ -3,7 +3,7 @@ import transformers
 import numpy as np
 import argparse, yaml, glob
 from huggingface_hub import hf_hub_download
-from torch.utils.data import Dataset, DataLoader, default_collate
+from torch.utils.data import Dataset, DataLoader, default_collate, ConcatDataset
 
 from esc.modules import ComplexSTFTLoss, MelSpectrogramLoss
 
@@ -25,24 +25,48 @@ def quantization_dropout(dropout_rate: float, max_streams: int):
     return streams
 
 class EvalSet(Dataset):
-    def __init__(self, eval_folder_path) -> None:
+    def __init__(self, eval_folder_path, duration=10,sample_rate=16000, hop_len=5) -> None:
         super().__init__()
         self.testset_files = glob.glob(f"{eval_folder_path}/*.wav")
         if not self.testset_files:
             self.testset_files = glob.glob(f"{eval_folder_path}/*/*.wav")
         self.testset_files = self.testset_files[:180000]
-        
+        self.duration = duration
+        self.sample_rate = sample_rate
+        self.hop_len = int(hop_len * sample_rate // 1000)  # hop_len in samples
+        self.win_len = 4 * self.hop_len  # win_len in samples, 4k-1
     def __len__(self):
         return len(self.testset_files)
 
     def __getitem__(self, i):
-        x, _ = torchaudio.load(self.testset_files[i])
-        return x[0, :-80]
+        file_path = self.testset_files[i]
+        # Load audio file by randomly crop to self.duration seconds
+        metadata = torchaudio.info(file_path)
+        max_frames = metadata.num_frames
+        if max_frames <= self.duration * self.sample_rate:
+            x, sr = torchaudio.load(file_path)
+        else:
+            random_offset = np.random.randint(0, max_frames - self.duration * self.sample_rate)
+            # random_offset = 0
+            x, sr = torchaudio.load(file_path, frame_offset=random_offset, num_frames=self.duration * self.sample_rate)
+        if len(x.shape) == 2:
+            x = x[0]
+        x = torch.nn.functional.pad(x, (0, self.duration * self.sample_rate - x.shape[-1]), mode='constant', value=0)
+        x = torch.nn.functional.pad(x, (0, self.win_len - x.shape[-1] % self.win_len - self.hop_len), mode='constant', value=0)
+        return x
     
-def make_dataloader(data_path, batch_size, shuffle, num_workers=0):
-    ds = EvalSet(data_path)
-    dl = DataLoader(ds, batch_size=batch_size, shuffle=shuffle, 
-                    collate_fn=default_collate, num_workers=num_workers)
+def make_dataloader(data_path, batch_size, shuffle, num_workers=0, sample_rate=16000, hop_len=50):
+    if isinstance(data_path, str):
+        ds = EvalSet(data_path, duration=10, sample_rate=sample_rate, hop_len=hop_len)
+        dl = DataLoader(ds, batch_size=batch_size, shuffle=shuffle,
+                        collate_fn=default_collate, num_workers=num_workers)
+    elif isinstance(data_path, list):
+        dss = [EvalSet(dp, duration=10, sample_rate=sample_rate, hop_len=hop_len) for dp in data_path]
+        ds = ConcatDataset(dss)
+        dl = DataLoader(ds, batch_size=batch_size, shuffle=shuffle, 
+                        collate_fn=default_collate, num_workers=num_workers)
+    else:
+        raise ValueError("data_path must be a string or a list of strings")
     return dl
 
 def make_optimizer(params, lr):

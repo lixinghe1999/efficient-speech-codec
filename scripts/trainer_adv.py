@@ -22,19 +22,23 @@ class TrainerAdv(Trainer):
         n_params_disc = sum(p.numel() for p in model_disc.parameters())
         
         # Metrics and Losses
-        self.metrics = {"PESQ": PESQ(), "MelDistance": MelSpectrogramDistance().to(self.accel.device), "SISDR": SISDR().to(self.accel.device)}
-        self.e_counter = EntropyCounter(self.config.model.codebook_size, self.config.model.max_streams, device=self.accel.device)
+        self.metrics = {
+                        # "PESQ": PESQ(), 
+                        "MelDistance": MelSpectrogramDistance().to(self.accel.device), 
+                        "SISDR": SISDR().to(self.accel.device)
+                        }
+        self.e_counter = EntropyCounter(self.config.model.codebook_size, self.config.model.max_streams, num_groups=self.config.model.group_size,
+                                        device=self.accel.device)
         self.loss_funcs = {"mel_loss": make_losses(name="mel_loss").to(self.accel.device),
                            "stft_loss": make_losses(name="stft_loss").to(self.accel.device)}
         
         # DataLoaders
         train_dl, val_dl = make_dataloader(self.config.data.train_data_path, self.config.data.train_bs_per_device, 
-                                           True, self.config.data.num_workers), \
+                                           True, self.config.data.num_workers, sample_rate=self.config.model.sr, hop_len=self.config.model.hop_len
+                                           ), \
                            make_dataloader(self.config.data.val_data_path, self.config.data.val_bs_per_device, 
-                                           False, self.config.data.num_workers)  
+                                           False, self.config.data.num_workers, sample_rate=self.config.model.sr, hop_len=self.config.model.hop_len)  
         self.args.train_steps, test_steps = len(train_dl)//self.args.num_devices, len(val_dl)//self.args.num_devices
-        self.args.max_train_steps = self.args.train_steps*self.args.num_epochs
-        self.args.pretraining_steps = self.args.train_steps*self.args.num_pretraining_epochs
         
         # Optimizers
         self.args.lr_disc = self.args.lr
@@ -48,8 +52,8 @@ class TrainerAdv(Trainer):
         
         self.accel.print(f"<<<<Experimental Setup: {self.args.exp_name}>>>>")
         self.accel.print(f"   BatchSize_per_Device: Train {self.config.data.train_bs_per_device} Test {self.config.data.val_bs_per_device}\n   LearningRate(gen): {self.args.lr}    LearningRate(disc): {self.args.lr_disc}")
-        self.accel.print(f"   Total_Training_Steps: {self.args.train_steps}*{self.args.num_epochs}={self.args.max_train_steps}")
-        self.accel.print(f"   Pre-Training_Steps: {self.args.train_steps}*{self.args.num_pretraining_epochs}={self.args.pretraining_steps}")
+        self.accel.print(f"   Total_Training_Steps: {self.args.max_train_steps}")
+        self.accel.print(f"   Pre-Training_Steps: {self.args.pretraining_steps}")
         self.accel.print(f"   Optimizer: AdamW    Scheduler: {self.args.scheduler_type}")
         self.accel.print(f"   Quantization_Dropout: {self.args.dropout_rate}")
         self.accel.print(f"   Model #Parameters: {n_params_gen/1e6:.2f}M  Discriminator #Parameters: {n_params_disc/1e6:.2f}M")
@@ -130,8 +134,8 @@ class TrainerAdv(Trainer):
         self.model, self.model_disc, self.opt_g, self.opt_d, self.scheduler = self.accel.prepare(g, d, opt_g, opt_d, scheduler) 
         self.loss_funcs["adv_loss"] = GANLoss(self.model_disc).to(self.accel.device)
 
-        if self.args.pretrain_ckp is not None and self.accel.is_main_process: 
-            self.evaluate() # pre-eval epoch 
+        # if self.args.pretrain_ckp is not None and self.accel.is_main_process: 
+        #     self.evaluate() # pre-eval epoch 
         self.accel.wait_for_everyone()       
         
         while True:

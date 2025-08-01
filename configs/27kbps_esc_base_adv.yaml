@@ -1,0 +1,70 @@
+data:
+    # train_data_path: ../data/train
+    # val_data_path: ../data/val
+    train_data_path:
+            - /data/home/lixinghe/datasets/aicodec/musdb18hq/train
+            - /data/home/lixinghe/datasets/aicodec/Jingju/train
+            - /data/home/lixinghe/datasets/aicodec/super_resolution_sq
+            - /data/home/lixinghe/datasets/aicodec/super_resolution_hires_2_44kHz
+            - /data/home/lixinghe/datasets/aicodec/qqmusic_top10w_wav/train
+
+            - /data/home/lixinghe/datasets/aicodec/jamendo
+            # - /data/home/lixinghe/datasets/aicodec/fma_large_f32_wav
+
+            - /data/home/lixinghe/datasets/aicodec/audioset/data/unbalanced_train_segments
+            - /data/home/lixinghe/datasets/aicodec/audioset/data/balanced_train_segments
+    val_data_path:
+            - /data/home/lixinghe/datasets/aicodec/musdb18hq/test
+            - /data/home/lixinghe/datasets/aicodec/Jingju/test
+            - /data/home/lixinghe/datasets/aicodec/qqmusic_top10w_wav/val
+
+            - /data/home/lixinghe/datasets/aicodec/audioset/data/eval_segments
+    test_data_path:
+            - /data/home/lixinghe/datasets/aicodec/musdb18hq/test
+            - /data/home/lixinghe/datasets/aicodec/Jingju/test
+            - /data/home/lixinghe/datasets/aicodec/audioset/data/eval_segments
+
+    num_workers: 16
+    train_bs_per_device: 4
+    val_bs_per_device: 4
+
+model_name: csvq+swinT
+model:
+    backbone: transformer
+    in_dim: 2
+    in_freq: 576 # n_fft = (in_freq - 1) * 2
+    h_dims: [45,72,96,144,192,384]
+    max_streams: 6
+    win_len: 20 # ms
+    hop_len: 5 # ms
+    sr: 44100
+    patch_size: [3,2]
+    swin_heads: [3,6,12,24,24]
+    swin_depth: 2
+    window_size: 4
+    mlp_ratio: 4.
+    overlap: 2
+    group_size: 9
+    codebook_size: 1024
+    codebook_dims: [8,8,8,8,8,8]
+    l2norm: True
+
+discriminator:
+    sample_rate: 44100
+    rates: []
+    periods: [2, 3, 5, 7, 11]
+    fft_sizes: [2048, 1024, 512]
+    bands:
+        - [0.0, 0.1]
+        - [0.1, 0.25]
+        - [0.25, 0.5]
+        - [0.5, 0.75]
+        - [0.75, 1.0]
+
+loss:
+    stft_weight: 0.0
+    cm_weight: .25
+    cb_weight: 1.0
+    mel_weight: 15.0
+    gen_weight: 1.0
+    feat_weight: 2.0

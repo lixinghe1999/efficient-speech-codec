@@ -1,4 +1,4 @@
-from .metrics import EntropyCounter, PESQ, MelSpectrogramDistance, SISDR
+from .metrics import EntropyCounter, PESQ, MelSpectrogramDistance, SISDR, LSD
 from .utils import read_yaml, EvalSet
 from esc.models import make_model
 
@@ -55,15 +55,21 @@ def eval_epoch(model, eval_loader:DataLoader,
     return all_perf
 
 def run(args):
-    # Data
-    eval_set = EvalSet(args.eval_folder_path)
-    eval_loader = DataLoader(eval_set, batch_size=args.batch_size, shuffle=False, collate_fn=default_collate)
-
     # Metrics
-    metric_funcs = {"PESQ": PESQ(), "MelDistance": MelSpectrogramDistance().to(args.device), "SISDR": SISDR().to(args.device)}
+    metric_funcs = {
+                    # "PESQ": PESQ(), 
+                    "LSD": LSD().to(args.device),
+                    "MelDistance": MelSpectrogramDistance().to(args.device), 
+                    "SISDR": SISDR().to(args.device)
+    }
 
     # Model
     cfg = read_yaml(f"{args.model_path}/config.yaml")
+
+    # Data
+    eval_set = EvalSet(args.eval_folder_path, duration=10, sample_rate=cfg['model']['sr'], hop_len=cfg['model']['hop_len'])
+    eval_loader = DataLoader(eval_set, batch_size=args.batch_size, shuffle=False, collate_fn=default_collate)
+
     model = make_model(cfg['model'], cfg['model_name'])
     model.load_state_dict(
         torch.load(f"{args.model_path}/model.pth", map_location="cpu")["model_state_dict"],

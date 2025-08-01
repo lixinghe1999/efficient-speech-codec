@@ -21,7 +21,11 @@ class Trainer:
         n_params = sum(p.numel() for p in model.parameters())
         
         # Metrics and Losses
-        self.metrics = {"PESQ": PESQ(), "MelDistance": MelSpectrogramDistance().to(self.accel.device), "SISDR": SISDR().to(self.accel.device)}
+        self.metrics = {
+                        # "PESQ": PESQ(), 
+                        "MelDistance": MelSpectrogramDistance().to(self.accel.device), 
+                        "SISDR": SISDR().to(self.accel.device)
+                        }
         self.e_counter = EntropyCounter(self.config.model.codebook_size, self.config.model.max_streams, device=self.accel.device)
         self.loss_funcs = {"mel_loss": make_losses(name="mel_loss").to(self.accel.device),
                            "stft_loss": make_losses(name="stft_loss").to(self.accel.device),}
@@ -135,7 +139,7 @@ class Trainer:
         perf = eval_epoch(model=self.accel.unwrap_model(self.model).to(self.accel.device), 
                           eval_loader=self.val_dl, metric_funcs=self.metrics, e_counter=self.e_counter,
                           device=self.accel.device, bps_per_stream=self.bps_per_stream,
-                          num_streams=eval_streams, verbose=False)
+                          num_streams=eval_streams, verbose=True)
 
         # wandb logging
         perf = {k:v[0] for k,v in perf.items()}

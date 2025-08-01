@@ -1,0 +1,1 @@
+nohup accelerate launch --gpu_ids 0,1,2,3 main.py  --exp_name esc27kbps_ft --config_path ./configs/27kbps_esc_base_adv.yaml  --lr 1.0e-4  --num_devices 4 --dropout_rate 0.75  --adv_training --pretrain_ckp ./output/esc27kbps/pretrained.pth --max_train_steps 150000 --pretraining_steps 0 &

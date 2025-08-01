@@ -169,3 +169,26 @@ class SISDR(nn.Module):
         sdr = 10 * torch.log10(signal/noise + eps)
 
         return sdr.squeeze(1) # (B,)
+
+
+class LSD(nn.Module):
+    def __init__(self, nfft=1024, hop=512, hf=743):
+        super().__init__()
+        self.window = torch.hann_window(nfft)
+        self.nfft = nfft
+        self.hop = hop
+        self.hf = hf
+
+    def forward(self, pred, target):
+        frames = min(pred.size()[1], target.size()[1])
+        pred_trim = pred[:, :frames]
+        target_trim = target[:, :frames]
+
+        sp = torch.stft(pred_trim, self.nfft, self.hop, window=self.window.to(pred.device), return_complex=True)
+        sp = torch.abs(sp)
+        st = torch.stft(target_trim, self.nfft, self.hop, window=self.window.to(target.device), return_complex=True)
+        st = torch.abs(st)
+        lsd = (sp - st).square().mean(dim=1).sqrt().mean(dim=1)
+        # lsd_lf = (sp[:, :self.hf, :] - st[:, :self.hf, :]).square().mean(dim=1).sqrt().mean()
+        # lsd_hf = (sp[:, self.hf:, :] - st[:, self.hf:, :]).square().mean(dim=1).sqrt().mean()
+        return lsd
